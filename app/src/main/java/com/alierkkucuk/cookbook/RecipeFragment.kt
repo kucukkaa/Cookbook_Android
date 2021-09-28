@@ -2,9 +2,11 @@ package com.alierkkucuk.cookbook
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
@@ -15,8 +17,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.navigation.Navigation
 import kotlinx.android.synthetic.main.fragment_recipe.*
-import java.lang.Exception
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import kotlin.Exception
 
 
 class RecipeFragment : Fragment() {
@@ -46,10 +51,81 @@ class RecipeFragment : Fragment() {
         iVFoodImg.setOnClickListener {
             chooseImage(it)
         }
+
+        arguments?.let{
+            var takenInfo = RecipeFragmentArgs.fromBundle(it).info
+            if(takenInfo.equals("frommenu")){
+                eTFoodName.setText("")
+                eTFoodIngredients.setText("")
+                BtnAdd.visibility = View.VISIBLE
+
+                val imageChooseDefault =BitmapFactory.decodeResource(context?.resources, R.drawable.defaultclick)
+                iVFoodImg.setImageBitmap(imageChooseDefault)
+            } else {
+                BtnAdd.visibility = View.INVISIBLE
+
+                val choosenId = RecipeFragmentArgs.fromBundle(it).id
+
+                context?.let{
+                    try {
+                        val db = it.openOrCreateDatabase("FoodDb",Context.MODE_PRIVATE,null)
+                        val cursor = db.rawQuery("SELECT * FROM fooddb WHERE id = ?", arrayOf(choosenId.toString()))
+
+                        val foodNameIndex = cursor.getColumnIndex("name")
+                        val foodIngredients = cursor.getColumnIndex("ingredients")
+                        val foodImage = cursor.getColumnIndex("image")
+
+                        while(cursor.moveToNext()){
+                            eTFoodName.setText(cursor.getString(foodNameIndex))
+                            eTFoodIngredients.setText(cursor.getString(foodIngredients))
+
+                            val byteArray = cursor.getBlob(foodImage)
+                            val bitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+
+                            iVFoodImg.setImageBitmap(bitmap)
+                        }
+                        cursor.close()
+
+
+                    }catch (e:Exception){
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
     }
 
     fun addRecipe(view: View){
-        //println("tıklandı")
+        val foodName = eTFoodName.text.toString()
+        val foodIngredients = eTFoodIngredients.text.toString()
+
+        if (choosenBitMap != null){
+            val choosenBitMap = createSmallSizeBitmap(choosenBitMap!!, 300)
+            val outputStream = ByteArrayOutputStream()
+            choosenBitMap.compress(Bitmap.CompressFormat.PNG, 50, outputStream)
+            val imageByteArray = outputStream.toByteArray()
+
+            try{
+                context?.let {
+                    val database = it.openOrCreateDatabase("FoodDb", Context.MODE_PRIVATE, null)
+                    database.execSQL("CREATE TABLE IF NOT EXISTS fooddb (id INTEGER PRIMARY KEY, name VARCHAR, ingredients VARCHAR, image BLOB)")
+
+                    val sqlString = "INSERT INTO fooddb (name, ingredients, image) VALUES (?, ?, ?)"
+                    val statement = database.compileStatement(sqlString)
+                    statement.bindString(1, foodName)
+                    statement.bindString(2, foodIngredients)
+                    statement.bindBlob(3, imageByteArray)
+                    statement.execute()
+                }
+
+
+            } catch (e:Exception){
+                e.printStackTrace()
+            }
+
+            val action = RecipeFragmentDirections.actionRecipeFragmentToListFragment()
+            Navigation.findNavController(view).navigate(action)
+        }
     }
 
     fun chooseImage(view: View){
@@ -110,6 +186,21 @@ class RecipeFragment : Fragment() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
+    fun createSmallSizeBitmap (choosenBitmap: Bitmap, maximumSize: Int) : Bitmap {
+        var width = choosenBitmap.width
+        var height = choosenBitmap.height
 
+        val scale : Double = width.toDouble() / height.toDouble()
+
+        if (scale>1){
+            width = maximumSize
+            height = (width / scale.toInt()).toInt()
+        } else {
+            height = maximumSize
+            width = (height * scale).toInt()
+        }
+
+        return Bitmap.createScaledBitmap(choosenBitmap, width, height, true)
+    }
 
 }
