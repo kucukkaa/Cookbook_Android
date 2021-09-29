@@ -89,6 +89,7 @@ class RecipeFragment : Fragment() {
 
                     }catch (e:Exception){
                         e.printStackTrace()
+
                     }
                 }
             }
@@ -202,5 +203,6 @@ class RecipeFragment : Fragment() {
 
         return Bitmap.createScaledBitmap(choosenBitmap, width, height, true)
     }
+
 
 }
